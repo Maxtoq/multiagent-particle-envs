@@ -13,12 +13,13 @@ class MultiAgentEnv(gym.Env):
 
     def __init__(self, world, reset_callback=None, reward_callback=None,
                  observation_callback=None, info_callback=None,
-                 done_callback=None, shared_viewer=True):
+                 done_callback=None, discrete_action=False, 
+                 shared_viewer=True):
 
         self.world = world
         self.agents = self.world.policy_agents
         # set required vectorized gym env property
-        self.n = len(world.policy_agents)
+        self.num_agents = len(world.policy_agents)
         # scenario callbacks
         self.reset_callback = reset_callback
         self.reward_callback = reward_callback
@@ -26,7 +27,7 @@ class MultiAgentEnv(gym.Env):
         self.info_callback = info_callback
         self.done_callback = done_callback
         # environment parameters
-        self.discrete_action_space = True
+        self.discrete_action_space = discrete_action
         # if true, action is a number 0...N, otherwise action is a one-hot N-dimensional vector
         self.discrete_action_input = False
         # if true, even the action is continuous, action will be performed discretely
@@ -38,6 +39,8 @@ class MultiAgentEnv(gym.Env):
         # configure spaces
         self.action_space = []
         self.observation_space = []
+        self.share_observation_space = []
+        share_obs_dim = 0
         for agent in self.agents:
             total_action_space = []
             # physical action space
@@ -66,15 +69,18 @@ class MultiAgentEnv(gym.Env):
                 self.action_space.append(total_action_space[0])
             # observation space
             obs_dim = len(observation_callback(agent, self.world))
+            share_obs_dim += obs_dim
             self.observation_space.append(spaces.Box(low=-np.inf, high=+np.inf, shape=(obs_dim,), dtype=np.float32))
             agent.action.c = np.zeros(self.world.dim_c)
+        self.share_observation_space = [spaces.Box(
+            low=-np.inf, high=+np.inf, shape=(share_obs_dim,), dtype=np.float32)] * self.num_agents
 
         # rendering
         self.shared_viewer = shared_viewer
         if self.shared_viewer:
             self.viewers = [None]
         else:
-            self.viewers = [None] * self.n
+            self.viewers = [None] * self.num_agents
         self._reset_render()
 
     def step(self, action_n):
@@ -99,13 +105,13 @@ class MultiAgentEnv(gym.Env):
         # all agents get total reward in cooperative case
         reward = np.sum(reward_n)
         if self.shared_reward:
-            reward_n = [reward] * self.n
+            reward_n = [reward] * self.num_agents
 
         return obs_n, reward_n, done_n, info_n
 
-    def reset(self):
+    def reset(self, seed=None):
         # reset world
-        self.reset_callback(self.world)
+        self.reset_callback(self.world, seed)
         # reset renderer
         self._reset_render()
         # record observations for each agent
@@ -281,6 +287,12 @@ class MultiAgentEnv(gym.Env):
                 for y in np.linspace(-range_max, +range_max, 5):
                     dx.append(np.array([x,y]))
         return dx
+
+    def seed(self, seed=None):
+        if seed is None:
+            np.random.seed(1)
+        else:
+            np.random.seed(seed)
 
 
 # vectorized wrapper for a batch of multi-agent environments
