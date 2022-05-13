@@ -109,9 +109,9 @@ class MultiAgentEnv(gym.Env):
 
         return obs_n, reward_n, done_n, info_n
 
-    def reset(self, seed=None):
+    def reset(self, seed=None, init_pos=None):
         # reset world
-        self.reset_callback(self.world, seed)
+        self.reset_callback(self.world, seed, init_pos)
         # reset renderer
         self._reset_render()
         # record observations for each agent
@@ -216,7 +216,7 @@ class MultiAgentEnv(gym.Env):
                     else:
                         word = alphabet[np.argmax(other.state.c)]
                     message += (other.name + ' to ' + agent.name + ': ' + word + '   ')
-            print(message)
+            # print(message)
 
         for i in range(len(self.viewers)):
             # create viewers (if necessary)
