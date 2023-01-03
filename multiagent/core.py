@@ -194,3 +194,65 @@ class World(object):
         force_a = +force if entity_a.movable else None
         force_b = -force if entity_b.movable else None
         return [force_a, force_b]
+
+
+class Wall:
+
+    def __init__(self, orientation, position):
+        if orientation == "hor":
+            self.orient = 1
+        elif orientation == "ver":
+            self.orient = 0
+        else:
+            print("ERROR: orientation parameter must be 'hor' or 'ver'.")
+            exit()
+
+        if not -1 <= position <= 1:
+            print("ERROR: position parameter must be in [-1, 1]- interval.")
+            exit()
+        self.position = position
+        # State
+        self.active = True
+        
+    def block(self, entity, temp_pos):
+        if not self.active:
+            return
+        if entity.state.p_pos[self.orient] > self.position:
+            if temp_pos[self.orient] - entity.size < self.position:
+                entity.state.p_vel[self.orient] = 0.0
+                entity.state.p_pos[self.orient] = self.position + entity.size
+        elif entity.state.p_pos[self.orient] < self.position:
+            if temp_pos[self.orient] + entity.size > self.position:
+                entity.state.p_vel[self.orient] = 0.0
+                entity.state.p_pos[self.orient] = self.position - entity.size
+
+
+class Walled_World(World):
+    def __init__(self):
+        super(Walled_World, self).__init__()
+        # Add walls on each side and 
+        self.walls = {
+            "South": Wall("ver", -1),
+            "North": Wall("ver", 1),
+            "West": Wall("hor", -1),
+            "East": Wall("hor", 1)
+        }
+
+    def integrate_state(self, p_force):
+        for i,entity in enumerate(self.entities):
+            if not entity.movable: continue
+            entity.state.p_vel = entity.state.p_vel * (1 - self.damping)
+            if (p_force[i] is not None):
+                entity.state.p_vel += (p_force[i] / entity.mass) * self.dt
+            if entity.max_speed is not None:
+                speed = np.sqrt(np.square(entity.state.p_vel[0]) \
+                        + np.square(entity.state.p_vel[1]))
+                if speed > entity.max_speed:
+                    entity.state.p_vel = entity.state.p_vel / \
+                        np.sqrt(np.square(entity.state.p_vel[0]) +
+                            np.square(entity.state.p_vel[1])) * entity.max_speed
+            # Check for wall collision
+            temp_pos = entity.state.p_pos + entity.state.p_vel * self.dt
+            for wall in self.walls.values():
+                wall.block(entity, temp_pos)
+            entity.state.p_pos += entity.state.p_vel * self.dt
